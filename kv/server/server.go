@@ -3,14 +3,11 @@ package server
 import (
 	"context"
 
-	"github.com/pingcap-incubator/tinykv/kv/coprocessor"
 	"github.com/pingcap-incubator/tinykv/kv/storage"
 	"github.com/pingcap-incubator/tinykv/kv/storage/raft_storage"
 	"github.com/pingcap-incubator/tinykv/kv/transaction/latches"
-	coppb "github.com/pingcap-incubator/tinykv/proto/pkg/coprocessor"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/tinykvpb"
-	"github.com/pingcap/tidb/kv"
 )
 
 var _ tinykvpb.TinyKvServer = new(Server)
@@ -21,9 +18,6 @@ type Server struct {
 
 	// (Used in 4B)
 	Latches *latches.Latches
-
-	// coprocessor API handler, out of course scope
-	copHandler *coprocessor.CopHandler
 }
 
 func NewServer(storage storage.Storage) *Server {
@@ -80,25 +74,5 @@ func (server *Server) KvBatchRollback(_ context.Context, req *kvrpcpb.BatchRollb
 
 func (server *Server) KvResolveLock(_ context.Context, req *kvrpcpb.ResolveLockRequest) (*kvrpcpb.ResolveLockResponse, error) {
 	// Your Code Here (4C).
-	return nil, nil
-}
-
-// SQL push down commands.
-func (server *Server) Coprocessor(_ context.Context, req *coppb.Request) (*coppb.Response, error) {
-	resp := new(coppb.Response)
-	reader, err := server.storage.Reader(req.Context)
-	if err != nil {
-		if regionErr, ok := err.(*raft_storage.RegionError); ok {
-			resp.RegionError = regionErr.RequestErr
-			return resp, nil
-		}
-		return nil, err
-	}
-	switch req.Tp {
-	case kv.ReqTypeDAG:
-		return server.copHandler.HandleCopDAGRequest(reader, req), nil
-	case kv.ReqTypeAnalyze:
-		return server.copHandler.HandleCopAnalyzeRequest(reader, req), nil
-	}
 	return nil, nil
 }
